@@ -263,20 +263,20 @@
     <p class="article-byline">Jacklyn Miller</p>
   </header>
 
-  <p class="body-text">Most RAG debugging conversations start the same way: the retrieval pipeline looks correct on paper, the LLM is generating fluent responses, but the answers are subtly wrong. Not hallucinated — just off. They sound like they came from your documents, but they didn't quite.</p>
+  <p class="body-text">Most RAG debugging conversations start the same way: the retrieval pipeline seems correct on paper, the LLM is generating fluent responses, but the answers are subtly wrong. Not hallucinated — just off. They sound like they came from your documents, sort of.</p>
 
-  <p class="body-text">This is the part of RAG that observability tools were built for. The failure isn't in the model. It's in what the model never got to see.</p>
+  <p class="body-text">This is the part of RAG that observability tools were built for. The failure isn't in the model. It's in what the model doesn't see.</p>
 
-  <p class="body-text">This post walks through the most common retrieval failures, why they're hard to catch without visibility into the pipeline, and what it looks like to actually fix them.</p>
+  <p class="body-text">This post walks through the most common retrieval failures, why they're hard to catch without visibility into the pipeline, and what it looks like to fix them.</p>
 
   <h2>The Retrieval Gap: What It Is and Why It Compounds</h2>
 
   <p class="body-text">When a user submits a query, your retrieval system computes a similarity score between that query's embedding and the embeddings in your vector store. The top-k chunks get passed to the LLM as context. The LLM generates an answer from whatever it received.</p>
 
-  <p class="body-text">The problem is that <strong>the LLM has no way to signal that the context it received was insufficient.</strong> It will produce a coherent answer from low-relevance chunks the same way it produces a coherent answer from high-relevance ones. Confidence of output tells you almost nothing about quality of retrieval.</p>
+  <p class="body-text">The problem is that <strong>the LLM has no way to signal that the context it received was insufficient or exceeds the context window.</strong> It will produce a coherent answer from low-relevance chunks the same way it produces a coherent answer from high-relevance ones, in the exact same voice and tone. Confidence of output is misleading and tells you almost nothing about quality of retrieval.</p>
 
   <div class="pullquote">
-    <p>The LLM will produce a coherent answer from low-relevance chunks the same way it produces one from high-relevance chunks. Output confidence tells you almost nothing about retrieval quality.</p>
+    <p>The LLM will produce a coherent answer from low-relevance chunks the same way it produces one from high-relevance chunks. Confidence of output is misleading and tells you almost nothing about quality of retrieval.</p>
   </div>
 
   <p class="body-text">This means retrieval failures are invisible at the generation layer. You need to look upstream.</p>
@@ -295,7 +295,7 @@
     <p class="failure-num">Failure 02</p>
     <h3>Embedding mismatch between query and document language</h3>
     <p class="body-text">Embeddings encode semantic similarity, but that similarity is trained on patterns in the embedding model's training data. If your users ask questions in different language than your documents use, retrieval degrades.</p>
-    <p class="body-text"><strong>Example:</strong> Your knowledge base uses formal academic language: "Andragogical principles suggest learners are self-directed." A user asks: "How do adults learn best?" The semantic distance between these phrasings may be larger than you expect, especially for domain-specific vocabulary.</p>
+    <p class="body-text"><strong>Example:</strong> Your knowledge base uses smart, formal academic language: "Andragogical principles suggest learners are self-directed." A user asks: "How do adults learn best?" The semantic distance between these phrasings may be larger than you expect, especially for domain-specific vocabulary.</p>
     <p class="body-text"><strong>Fix:</strong> Evaluate your embedding model on representative query/document pairs from your actual domain. Consider query rewriting — using the LLM to rephrase the user's query in document-style language before retrieval — as a preprocessing step.</p>
   </div>
 
