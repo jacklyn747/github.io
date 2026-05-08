@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why Your RAG Pipeline Answers Confidently and Retrieves Wrong — Jackie Miller</title>
+<meta name="description" content="The four retrieval failure modes most teams don't catch until production — chunk fragmentation, embedding mismatch, insufficient top-k, and vector store staleness.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,400;9..144,0,700;9..144,0,900;9..144,1,400;9..144,1,700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --paper:     #EAE4DA;
+    --paper-up:  #F4EFE5;
+    --paper-dn:  #DFD8C9;
+    --ink:       #1D1D1B;
+    --ink-500:   #565654;
+    --ink-300:   #8B8B88;
+    --ink-150:   #C7C5BF;
+    --teal:      #245E55;
+    --orange:    #ED773C;
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-body:    'Inter', sans-serif;
+    --font-mono:    'JetBrains Mono', monospace;
+  }
+
+  html { font-size: 16px; scroll-behavior: smooth; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.5;
+  }
+
+  .top-rule { width: 100%; height: 6px; background: var(--teal); }
+
+  /* NAV */
+  nav {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 32px;
+  }
+
+  nav a {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--teal);
+    text-decoration: none;
+    border-bottom: 1px solid var(--teal);
+    padding-bottom: 1px;
+  }
+  nav a:hover { color: var(--orange); border-color: var(--orange); }
+
+  /* ARTICLE */
+  article {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 32px 96px;
+  }
+
+  /* Header */
+  .article-header {
+    padding: 48px 0 40px;
+    border-bottom: 1.5px solid var(--ink);
+    margin-bottom: 52px;
+  }
+
+  .article-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--teal);
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(30px, 5vw, 46px);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    font-variation-settings: "opsz" 96;
+    margin-bottom: 20px;
+  }
+
+  .article-byline {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-300);
+    letter-spacing: 0.04em;
+  }
+
+  /* Body text */
+  .body-text {
+    font-size: 17px;
+    color: var(--ink-500);
+    line-height: 1.75;
+    max-width: 64ch;
+    margin-bottom: 28px;
+  }
+
+  .body-text strong { color: var(--ink); font-weight: 600; }
+
+  /* Headings */
+  h2 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--ink);
+    font-variation-settings: "opsz" 60;
+    margin: 52px 0 16px;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--teal);
+    font-variation-settings: "opsz" 40;
+    margin: 36px 0 12px;
+    letter-spacing: -0.01em;
+  }
+
+  /* Pull quote */
+  .pullquote {
+    border-left: 5px solid var(--teal);
+    padding: 20px 28px;
+    margin: 40px 0;
+    background: var(--paper-up);
+    border-top: 1.5px solid var(--ink-150);
+    border-bottom: 1.5px solid var(--ink-150);
+  }
+
+  .pullquote p {
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-style: italic;
+    line-height: 1.4;
+    color: var(--ink);
+    font-variation-settings: "opsz" 40;
+  }
+
+  /* Code block */
+  pre {
+    background: var(--ink);
+    color: var(--sky, #9ED6DF);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 28px 32px;
+    overflow-x: auto;
+    margin: 32px 0;
+    box-shadow: 5px 5px 0 0 var(--teal);
+    border: 1.5px solid var(--ink);
+  }
+
+  pre .comment { color: #8B8B88; }
+  pre .keyword { color: #EAC119; }
+  pre .string  { color: #9ED6DF; }
+
+  /* Numbered failure items */
+  .failure-item {
+    padding: 28px 32px;
+    border: 1.5px solid var(--ink);
+    box-shadow: 4px 4px 0 0 var(--ink);
+    background: var(--paper-up);
+    margin: 24px 0;
+  }
+
+  .failure-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--orange);
+    margin-bottom: 8px;
+  }
+
+  /* Summary list */
+  .summary-list {
+    list-style: none;
+    margin: 0 0 28px;
+    padding: 0;
+  }
+
+  .summary-list li {
+    font-size: 16px;
+    color: var(--ink-500);
+    padding: 10px 0 10px 20px;
+    border-bottom: 1px solid var(--ink-150);
+    position: relative;
+  }
+
+  .summary-list li::before {
+    content: '–';
+    position: absolute;
+    left: 0;
+    color: var(--teal);
+    font-family: var(--font-mono);
+  }
+
+  /* Author bio */
+  .author-bio {
+    margin-top: 64px;
+    padding-top: 32px;
+    border-top: 1.5px solid var(--ink);
+  }
+
+  .bio-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-300);
+    margin-bottom: 12px;
+  }
+
+  .bio-text {
+    font-size: 14px;
+    color: var(--ink-500);
+    line-height: 1.6;
+  }
+
+  .bio-text a {
+    color: var(--teal);
+    text-decoration: none;
+    border-bottom: 1px solid var(--teal);
+  }
+</style>
+</head>
+<body>
+
+<div class="top-rule"></div>
+
+<nav><a href="index.html">← Jackie Miller</a></nav>
+
+<article>
+
+  <header class="article-header">
+    <p class="article-meta">Technical Explainer · RAG Systems · May 2026</p>
+    <h1>Why Your RAG Pipeline Answers Confidently and Retrieves Wrong</h1>
+    <p class="article-byline">Jacklyn Miller</p>
+  </header>
+
+  <p class="body-text">Most RAG debugging conversations start the same way: the retrieval pipeline looks correct on paper, the LLM is generating fluent responses, but the answers are subtly wrong. Not hallucinated — just off. They sound like they came from your documents, but they didn't quite.</p>
+
+  <p class="body-text">This is the part of RAG that observability tools were built for. The failure isn't in the model. It's in what the model never got to see.</p>
+
+  <p class="body-text">This post walks through the most common retrieval failures, why they're hard to catch without visibility into the pipeline, and what it looks like to actually fix them.</p>
+
+  <h2>The Retrieval Gap: What It Is and Why It Compounds</h2>
+
+  <p class="body-text">When a user submits a query, your retrieval system computes a similarity score between that query's embedding and the embeddings in your vector store. The top-k chunks get passed to the LLM as context. The LLM generates an answer from whatever it received.</p>
+
+  <p class="body-text">The problem is that <strong>the LLM has no way to signal that the context it received was insufficient.</strong> It will produce a coherent answer from low-relevance chunks the same way it produces a coherent answer from high-relevance ones. Confidence of output tells you almost nothing about quality of retrieval.</p>
+
+  <div class="pullquote">
+    <p>The LLM will produce a coherent answer from low-relevance chunks the same way it produces one from high-relevance chunks. Output confidence tells you almost nothing about retrieval quality.</p>
+  </div>
+
+  <p class="body-text">This means retrieval failures are invisible at the generation layer. You need to look upstream.</p>
+
+  <h2>Four Retrieval Failures Worth Knowing</h2>
+
+  <div class="failure-item">
+    <p class="failure-num">Failure 01</p>
+    <h3>Chunk boundary fragmentation</h3>
+    <p class="body-text">Retrieval operates on chunks, not documents. If your chunking strategy cuts a concept in half — for example, a question answered across two chunks with no overlap — neither chunk alone will score high enough to surface in the top-k, even though the answer exists in your knowledge base.</p>
+    <p class="body-text"><strong>Example:</strong> A user asks about ADDIE's Evaluation phase. Your document covers ADDIE in a single section that runs 1,400 tokens. With a 1,000-token chunk size and no overlap, the Evaluation phase lands in chunk 2. Chunk 1 scores higher for the word "ADDIE" and gets retrieved. The answer is incomplete.</p>
+    <p class="body-text"><strong>Fix:</strong> Increase chunk overlap (200–300 tokens is a reasonable starting point for narrative content) and experiment with semantic chunking strategies that try to split on topic boundaries rather than token counts.</p>
+  </div>
+
+  <div class="failure-item">
+    <p class="failure-num">Failure 02</p>
+    <h3>Embedding mismatch between query and document language</h3>
+    <p class="body-text">Embeddings encode semantic similarity, but that similarity is trained on patterns in the embedding model's training data. If your users ask questions in different language than your documents use, retrieval degrades.</p>
+    <p class="body-text"><strong>Example:</strong> Your knowledge base uses formal academic language: "Andragogical principles suggest learners are self-directed." A user asks: "How do adults learn best?" The semantic distance between these phrasings may be larger than you expect, especially for domain-specific vocabulary.</p>
+    <p class="body-text"><strong>Fix:</strong> Evaluate your embedding model on representative query/document pairs from your actual domain. Consider query rewriting — using the LLM to rephrase the user's query in document-style language before retrieval — as a preprocessing step.</p>
+  </div>
+
+  <div class="failure-item">
+    <p class="failure-num">Failure 03</p>
+    <h3>Top-k set too small for complex questions</h3>
+    <p class="body-text">Simple factual questions often need only one or two chunks. Multi-part questions, comparative questions, or anything requiring synthesis across concepts need more. A fixed top-k setting that works for simple queries will silently fail on complex ones.</p>
+    <p class="body-text"><strong>Example:</strong> "Compare constructivism and behaviorism for corporate training contexts" may require chunks from three or four separate document sections. A top-k of 3 might return three constructivism chunks and miss behaviorism entirely.</p>
+    <p class="body-text"><strong>Fix:</strong> Implement dynamic top-k selection based on query complexity, or use a re-ranking step that scores chunks for relevance after initial retrieval and expands the context window for queries that need it.</p>
+  </div>
+
+  <div class="failure-item">
+    <p class="failure-num">Failure 04</p>
+    <h3>Vector store staleness</h3>
+    <p class="body-text">If your knowledge base updates but your vector store doesn't re-embed, you're retrieving from an outdated index. This is especially common in applications where the knowledge base is a living document — product documentation, policy guides, internal wikis.</p>
+    <p class="body-text"><strong>Fix:</strong> Implement a document hash check on load. If the source document has changed since the last embedding, trigger a re-embed for that document. Avoid full re-indexing on every launch — it's expensive and unnecessary.</p>
+  </div>
+
+  <h2>What This Looks Like in a Real Pipeline</h2>
+
+  <p class="body-text">Here's a simplified version of a retrieval chain setup that makes some of these failure modes more visible:</p>
+
+<pre><span class="comment"># Enable verbose output to see what chunks are being retrieved</span>
+chain = ConversationalRetrievalChain.from_llm(
+    llm=llm,
+    retriever=vectorstore.as_retriever(
+        search_kwargs={<span class="string">'k'</span>: 5}  <span class="comment"># start higher than you think you need</span>
+    ),
+    return_source_documents=<span class="keyword">True</span>,  <span class="comment"># critical for observability</span>
+    verbose=<span class="keyword">True</span>,
+    callbacks=[StdOutCallbackHandler()]
+)</pre>
+
+  <p class="body-text"><strong>Setting <code>return_source_documents=True</code> is the minimum viable observability step.</strong> It lets you inspect what the retriever actually returned and compare it against what the LLM used in its answer. Without this, you're debugging blind.</p>
+
+  <div class="pullquote">
+    <p>return_source_documents=True is the minimum viable observability step. Without it, you're debugging blind.</p>
+  </div>
+
+  <p class="body-text">For production pipelines, you want to log retrieved chunks alongside queries and responses so you can identify patterns: which queries consistently return low-relevance chunks, which document sections are never retrieved despite containing relevant content, where the LLM's answer diverges from what the sources actually say.</p>
+
+  <p class="body-text">This is exactly the kind of signal that makes evaluation frameworks useful. Logging retrieval isn't just for debugging — it's the feedback loop that lets you continuously improve chunk strategy, embedding choice, and top-k configuration over time.</p>
+
+  <h2>A Note on Evaluation</h2>
+
+  <p class="body-text">Retrieval quality is hard to evaluate without ground truth — pairs of queries and the chunks that should have been retrieved for them. Building even a small evaluation set (20–30 representative queries with expected source documents) gives you something concrete to measure against when you change chunking strategy or swap embedding models.</p>
+
+  <p class="body-text">Without it, you're measuring retrieval quality by proxy (does the LLM answer sound right?) which is unreliable for the reasons covered above.</p>
+
+  <h2>Summary</h2>
+
+  <ul class="summary-list">
+    <li>Retrieval failures are invisible at the generation layer — you need to observe the pipeline upstream of the LLM</li>
+    <li>Chunk boundary fragmentation, embedding mismatch, insufficient top-k, and vector store staleness are the four most common failure patterns</li>
+    <li><code>return_source_documents=True</code> and verbose logging are the minimum instrumentation you need to start diagnosing retrieval quality</li>
+    <li>A small ground-truth evaluation set is the difference between iterating on intuition and iterating on evidence</li>
+  </ul>
+
+  <div class="author-bio">
+    <p class="bio-label">About the author</p>
+    <p class="bio-text">Jacklyn Miller is an AI-native content strategist and conversational systems designer. She built and deployed a RAG-powered instructional design assistant at <a href="https://github.com/jacklyn747/learning-assistant-ai" target="_blank">github.com/jacklyn747/learning-assistant-ai</a>. <a href="index.html">← Back to jacklyn747.github.io</a></p>
+  </div>
+
+</article>
+
+</body>
+</html>
